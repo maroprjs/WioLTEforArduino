@@ -1,3 +1,5 @@
+->Note: changes on this fork to be found in branch_ maro_additions
+
 # Wio LTE for Arduino
 
 Wio LTEのArduino IDE用ライブラリです。
