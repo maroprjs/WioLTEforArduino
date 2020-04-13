@@ -485,7 +485,7 @@ bool WioLTE::TurnOff(long timeout)
 		delay(POLLING_INTERVAL);
 	}
 
-	if (!_AtSerial.ReadResponse("^POWERED DOWN$", 60000, NULL)) return RET_ERR(false, E_UNKNOWN);
+	if (!_AtSerial.ReadResponse("^POWERED DOWN$", timeout, NULL)) return RET_ERR(false, E_UNKNOWN);
 
 	return RET_OK(true);
 }
@@ -917,7 +917,7 @@ int WioLTE::SocketOpen(const char* host, int port, SocketType type)
 
 	_AtSerial.WriteCommand("AT+QISTATE?");
 	do {
-		if (!_AtSerial.ReadResponse("^(OK|\\+QISTATE: .*)$", 10000, &response)) return RET_ERR(-1, E_UNKNOWN);
+		if (!_AtSerial.ReadResponse("^(OK|\\+QISTATE: .*)$", 5000, &response)) return RET_ERR(-1, E_UNKNOWN);
 		if (strncmp(response.c_str(), "+QISTATE: ", 10) == 0) {
 			parser.Parse(&response.c_str()[10]);
 			if (parser.Size() >= 1) {
@@ -936,10 +936,10 @@ int WioLTE::SocketOpen(const char* host, int port, SocketType type)
 
 	StringBuilder str;
 	if (!str.WriteFormat("AT+QIOPEN=1,%d,\"%s\",\"%s\",%d", connectId, typeStr, host, port)) return RET_ERR(-1, E_UNKNOWN);
-	if (!_AtSerial.WriteCommandAndReadResponse(str.GetString(), "^OK$", 150000, NULL)) return RET_ERR(-1, E_UNKNOWN);
+	if (!_AtSerial.WriteCommandAndReadResponse(str.GetString(), "^OK$", 5000, NULL)) return RET_ERR(-1, E_UNKNOWN);
 	str.Clear();
 	if (!str.WriteFormat("^\\+QIOPEN: %d,0$", connectId)) return RET_ERR(-1, E_UNKNOWN);
-	if (!_AtSerial.ReadResponse(str.GetString(), 150000, NULL)) return RET_ERR(-1, E_UNKNOWN);
+	if (!_AtSerial.ReadResponse(str.GetString(), 5000, NULL)) return RET_ERR(-1, E_UNKNOWN);
 
 	return RET_OK(connectId);
 }
@@ -1088,7 +1088,7 @@ int WioLTE::HttpGet(const char* url, char* data, int dataSize, const WioLTEHttpH
 	StringBuilder str;
 	if (!str.WriteFormat("AT+QHTTPGET=%d,%d", timeoutSec, headerSb.Length())) return RET_ERR(false, E_UNKNOWN);
 	_AtSerial.WriteCommand(str.GetString());
-	if (!_AtSerial.ReadResponse("^CONNECT$", 60000, NULL)) return RET_ERR(false, E_UNKNOWN);
+	if (!_AtSerial.ReadResponse("^CONNECT$", timeout, NULL)) return RET_ERR(false, E_UNKNOWN);
 	const char* headerStr = headerSb.GetString();
 	_AtSerial.WriteBinary((const byte*)headerStr, strlen(headerStr));
 	if (!_AtSerial.ReadResponse("^OK$", 1000, NULL)) return RET_ERR(false, E_UNKNOWN);
@@ -1103,13 +1103,13 @@ int WioLTE::HttpGet(const char* url, char* data, int dataSize, const WioLTEHttpH
 	if (!_AtSerial.ReadResponse("^CONNECT$", 1000, NULL)) return RET_ERR(-1, E_UNKNOWN);
 	if (contentLength >= 0) {
 		if (contentLength + 1 > dataSize) return RET_ERR(-1, E_UNKNOWN);
-		if (!_AtSerial.ReadBinary((byte*)data, contentLength, 60000)) return RET_ERR(-1, E_UNKNOWN);
+		if (!_AtSerial.ReadBinary((byte*)data, contentLength, timeout )) return RET_ERR(-1, E_UNKNOWN);
 		data[contentLength] = '\0';
 
 		if (!_AtSerial.ReadResponse("^OK$", 1000, NULL)) return RET_ERR(-1, E_UNKNOWN);
 	}
 	else {
-		if (!_AtSerial.ReadResponseQHTTPREAD(data, dataSize, 60000)) return RET_ERR(-1, E_UNKNOWN);
+		if (!_AtSerial.ReadResponseQHTTPREAD(data, dataSize, timeout)) return RET_ERR(-1, E_UNKNOWN);
 		contentLength = strlen(data);
 	}
 	if (!_AtSerial.ReadResponse("^\\+QHTTPREAD: 0$", 1000, NULL)) return RET_ERR(-1, E_UNKNOWN);
@@ -1180,7 +1180,7 @@ bool WioLTE::HttpPost(const char* url, const char* data, int* responseCode, cons
 	StringBuilder str;
 	if (!str.WriteFormat("AT+QHTTPPOST=%d,%d,%d", headerSb.Length() + strlen(data), timeoutSec, timeoutSec)) return RET_ERR(false, E_UNKNOWN);
 	_AtSerial.WriteCommand(str.GetString());
-	if (!_AtSerial.ReadResponse("^CONNECT$", 60000, NULL)) return RET_ERR(false, E_UNKNOWN);
+	if (!_AtSerial.ReadResponse("^CONNECT$", timeout, NULL)) return RET_ERR(false, E_UNKNOWN);
 	const char* headerStr = headerSb.GetString();
 	_AtSerial.WriteBinary((const byte*)headerStr, strlen(headerStr));
 	_AtSerial.WriteBinary((const byte*)data, strlen(data));
@@ -1305,4 +1305,18 @@ void WioLTE::SystemReset()
 	NVIC_SystemReset();
 }
 
+bool WioLTE::PsActive(){
+	bool retVal = true;
+	if (!_AtSerial.WriteCommandAndReadResponse("AT+QIACT?", "^OK$", 10000, NULL)) return RET_ERR(false, E_UNKNOWN);
+	return retVal;
+}
+
+bool WioLTE::Ping(const char* host){
+	bool retVal = true;
+	char cmd[30];
+	sprintf(cmd,"AT+QPING=1,:%s", host);
+
+	if (!_AtSerial.WriteCommandAndReadResponse( cmd, "^OK$", 5000, NULL)) return RET_ERR(false, E_UNKNOWN);
+	return retVal;
+}
 ////////////////////////////////////////////////////////////////////////////////////////
